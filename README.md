@@ -1,5 +1,9 @@
 # Laravel Health Digest
 
+[![Latest Version](https://img.shields.io/packagist/v/felipearnold/laravel-health-digest.svg)](https://packagist.org/packages/felipearnold/laravel-health-digest)
+[![Tests](https://github.com/felipeArnold/laravel-health-digest/actions/workflows/tests.yml/badge.svg)](https://github.com/felipeArnold/laravel-health-digest/actions/workflows/tests.yml)
+[![License](https://img.shields.io/packagist/l/felipearnold/laravel-health-digest.svg)](LICENSE)
+
 Logs slow queries and slow requests as JSON and groups them, together with the
 errors in your application log, into a ranked digest that a human or an AI
 agent can turn into tickets.
