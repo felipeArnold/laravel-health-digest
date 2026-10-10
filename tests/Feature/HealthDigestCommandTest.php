@@ -286,3 +286,79 @@ describe('digest drops stale entries and masks literals', function (): void {
             ->and($digest['errors'])->toBeEmpty();
     });
 });
+
+describe('digest groups across databases and deploys', function (): void {
+    beforeEach(function (): void {
+        $this->originalBasePath = base_path();
+        $this->deployRelease = fn (string $release) => app()->setBasePath('/home/forge/example.com/releases/'.$release);
+    });
+
+    afterEach(function (): void {
+        app()->setBasePath($this->originalBasePath);
+    });
+
+    it('keeps queries on different tables apart when identifiers are double quoted', function (): void {
+        ($this->writeLog)('health-digest-2026-10-05.log', [
+            ($this->slowQuery)('2026-10-05 09:00:00', 'select * from "orders" where "customer_id" = 10', 600, 'ACME'),
+            ($this->slowQuery)('2026-10-05 10:00:00', 'select * from "orders" where "customer_id" = 25', 700, 'ACME'),
+            ($this->slowQuery)('2026-10-05 11:00:00', 'select * from "invoices" where "tenant_id" = 3', 800, 'ACME'),
+        ]);
+
+        expect(array_column(($this->digest)()['slow_queries'], 'sample', 'count'))->toBe([
+            2 => 'select * from "orders" where "customer_id" = ?',
+            1 => 'select * from "invoices" where "tenant_id" = ?',
+        ]);
+    });
+
+    it('masks double quoted text that is not an identifier in raw SQL', function (): void {
+        ($this->writeLog)('health-digest-2026-10-05.log', [
+            ($this->slowQuery)('2026-10-05 09:00:00', 'select * from customers where name = "John Doe"', 600, 'ACME'),
+        ]);
+
+        expect(($this->digest)()['slow_queries'][0]['sample'])->toBe('select * from customers where name = ?');
+    });
+
+    it('still masks double quoted text in error messages', function (): void {
+        ($this->writeLog)('laravel-2026-10-05.log', [
+            '[2026-10-05 10:00:00] production.ERROR: Unknown coupon "SUMMER-2026" for customer',
+            '[2026-10-05 11:00:00] production.ERROR: Unknown coupon "WINTER" for customer',
+        ]);
+
+        expect(($this->digest)()['errors'])->toHaveCount(1)
+            ->and(($this->digest)()['errors'][0]['sample'])->toBe('Unknown coupon ? for customer');
+    });
+
+    it('groups an error logged by a previous release with the current one', function (): void {
+        ($this->deployRelease)('20261005130000');
+        $previousRelease = '/home/forge/example.com/releases/20261004120000';
+        $currentException = ($this->exceptionContext)('App\Exceptions\BalanceException', base_path('app/Actions/Foo.php'), 42);
+        $previousException = ($this->exceptionContext)('App\Exceptions\BalanceException', $previousRelease.'/app/Actions/Foo.php', 42);
+
+        ($this->writeLog)('laravel-2026-10-05.log', [
+            "[2026-10-05 09:00:00] production.ERROR: Inconsistent balance {$previousException}",
+            "[2026-10-05 11:00:00] production.ERROR: Inconsistent balance {$currentException}",
+        ]);
+
+        expect(($this->digest)()['errors'])->toHaveCount(1)
+            ->and(($this->digest)()['errors'][0])->toMatchArray([
+                'location' => 'app/Actions/Foo.php:42',
+                'count' => 2,
+            ]);
+    });
+
+    it('splits vendor errors from a previous release by message', function (): void {
+        ($this->deployRelease)('20261005130000');
+        $previousRelease = '/home/forge/example.com/releases/20261004120000';
+        $queryException = ($this->exceptionContext)('Illuminate\Database\QueryException', $previousRelease.'/vendor/laravel/framework/src/Illuminate/Database/Connection.php', 838);
+
+        ($this->writeLog)('laravel-2026-10-05.log', [
+            "[2026-10-05 10:00:00] production.ERROR: SQLSTATE[42S22]: Column not found {$queryException}",
+            "[2026-10-05 10:30:00] production.ERROR: SQLSTATE[42S02]: Base table or view not found {$queryException}",
+        ]);
+
+        $errors = ($this->digest)()['errors'];
+
+        expect($errors)->toHaveCount(2)
+            ->and(array_column($errors, 'location'))->each->toBe('vendor/laravel/framework/src/Illuminate/Database/Connection.php:838');
+    });
+});
