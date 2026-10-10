@@ -44,7 +44,7 @@ class BuildDigest
      * @param  Collection<int, array<string, mixed>>  $entries
      * @return list<array<string, mixed>>
      */
-    private function rank(Collection $entries, int $limit): array
+    public function rank(Collection $entries, int $limit): array
     {
         return $entries->groupBy('group_key')
             ->map(fn (Collection $occurrences, string $groupKey): array => $this->summarize($groupKey, $occurrences))

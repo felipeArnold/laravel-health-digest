@@ -11,6 +11,8 @@ class HealthDigest
 {
     public const string ORIGIN_CONTEXT_KEY = 'health_digest_origin';
 
+    public const string DASHBOARD_GATE = 'viewHealthDigest';
+
     private static ?Closure $tenantResolver = null;
 
     /** @param  Closure(): (string|int|null)  $resolver */

@@ -16,6 +16,8 @@ agent can turn into tickets.
 - **Digest** — `php artisan health:digest` groups entries that differ only by
   literals, masks numbers, quoted strings and e-mails, and ranks by
   `count × p95`.
+- **Dashboard** — `/health-digest/slow-queries` shows the same ranking for slow
+  queries in the browser, with filters for period, tenant and SQL text.
 
 ## Requirements
 
@@ -33,7 +35,25 @@ The service provider is auto-discovered. It:
 - registers a daily JSON log channel named `health-digest`
   (`storage/logs/health-digest-YYYY-MM-DD.log`) unless you define one;
 - listens to `QueryExecuted`, `JobProcessing` and `CommandStarting`;
-- prepends `LogSlowRequests` to the `web` middleware group.
+- prepends `LogSlowRequests` to the `web` middleware group;
+- registers the dashboard route and the `viewHealthDigest` gate.
+
+### Routes outside the `web` group
+
+Requests that skip the `web` group are neither timed nor used as the origin of
+their slow queries, which then show up as `console`. Filament panels are the
+common case: each panel declares its own middleware list. Add the middleware
+there:
+
+```php
+use FelipeArnold\HealthDigest\Http\Middleware\LogSlowRequests;
+
+$panel->middleware([
+    LogSlowRequests::class,
+    EncryptCookies::class,
+    // ...
+]);
+```
 
 ### Identify the tenant (optional)
 
@@ -55,6 +75,28 @@ A resolver that throws is treated as `null`; it never breaks the request.
 Schedule::command('health:digest')->twiceDailyAt(7, 13, 30)->withoutOverlapping();
 ```
 
+### Slow queries dashboard
+
+`/health-digest/slow-queries` lists the slow queries read live from the log,
+grouped and ranked like the digest, with filters for period, tenant and SQL
+text. The page is self-contained HTML: no Livewire, no asset build.
+
+Access goes through the `viewHealthDigest` gate, which only allows the `local`
+environment. Define it in your application to open the page elsewhere:
+
+```php
+use Illuminate\Support\Facades\Gate;
+
+Gate::define('viewHealthDigest', fn ($user = null): bool => $user?->is_admin === true);
+```
+
+The page runs under the `web` middleware group, so the gate receives the user
+of the default guard. Use `dashboard.middleware` to add authentication or to
+switch guards.
+
+Set `HEALTH_DIGEST_DASHBOARD_ENABLED=false` to remove the route, or
+`HEALTH_DIGEST_DASHBOARD_PATH` to change its prefix.
+
 ## Configuration
 
 | Key | Env | Default |
@@ -68,6 +110,9 @@ Schedule::command('health:digest')->twiceDailyAt(7, 13, 30)->withoutOverlapping(
 | `middleware_groups` | — | `['web']` |
 | `error_log_path` | `HEALTH_DIGEST_ERROR_LOG_PATH` | `storage/logs/laravel.log` |
 | `output_path` | `HEALTH_DIGEST_OUTPUT_PATH` | `storage/app/health-digest/latest.json` |
+| `dashboard.enabled` | `HEALTH_DIGEST_DASHBOARD_ENABLED` | `true` |
+| `dashboard.path` | `HEALTH_DIGEST_DASHBOARD_PATH` | `health-digest` |
+| `dashboard.middleware` | — | `['web']` |
 
 ## Digest format
 
@@ -117,6 +162,10 @@ suffix of query exceptions and mask quoted strings, numbers, dates, documents
 and e-mails. Livewire component and method names are accepted only when they
 look like identifiers, so free text from the request payload never reaches the
 digest.
+
+The dashboard shows the same normalized SQL as the digest: literals appear as
+`?`. The raw log file, however, stores `$query->sql` as executed, so values
+written directly into the SQL (not bound) stay in the log until it rotates.
 
 ## Testing
 

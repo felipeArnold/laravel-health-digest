@@ -32,11 +32,13 @@ class ReadLogEntries
     private const int SAMPLE_MAX_LENGTH = 300;
 
     /** @return Collection<int, array<string, mixed>> */
-    public function handle(string $slowLogPath, string $errorLogPath, CarbonInterface $since): Collection
+    public function handle(string $slowLogPath, ?string $errorLogPath, CarbonInterface $since): Collection
     {
+        $errorLines = $errorLogPath === null ? LazyCollection::empty() : $this->linesFrom($errorLogPath, $since);
+
         return $this->linesFrom($slowLogPath, $since)
             ->map(fn (string $line): ?array => $this->parseSlowLine($line))
-            ->concat($this->linesFrom($errorLogPath, $since)->map(fn (string $line): ?array => $this->parseErrorLine($line)))
+            ->concat($errorLines->map(fn (string $line): ?array => $this->parseErrorLine($line)))
             ->filter(fn (?array $entry): bool => $entry !== null && $entry['datetime']->greaterThanOrEqualTo($since))
             ->values()
             ->collect();
