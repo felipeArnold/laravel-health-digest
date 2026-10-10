@@ -46,4 +46,15 @@ return [
     */
     'output_path' => env('HEALTH_DIGEST_OUTPUT_PATH'),
 
+    /*
+    | Web page that lists the slow queries read from the log. Access is
+    | controlled by the "viewHealthDigest" gate, which only allows the
+    | local environment until the application defines its own.
+    */
+    'dashboard' => [
+        'enabled' => (bool) env('HEALTH_DIGEST_DASHBOARD_ENABLED', true),
+        'path' => env('HEALTH_DIGEST_DASHBOARD_PATH', 'health-digest'),
+        'middleware' => ['web'],
+    ],
+
 ];

@@ -13,6 +13,7 @@ use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Http\Kernel as HttpKernel;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Monolog\Formatter\JsonFormatter;
 
@@ -30,6 +31,7 @@ class HealthDigestServiceProvider extends ServiceProvider
         ], 'health-digest-config');
 
         $this->registerLogChannel();
+        $this->registerDashboard();
 
         Event::listen(QueryExecuted::class, [LogSlowQuery::class, 'handle']);
         Event::listen(JobProcessing::class, [LogSlowQuery::class, 'attributeToJob']);
@@ -52,6 +54,19 @@ class HealthDigestServiceProvider extends ServiceProvider
 
         foreach (array_intersect((array) config('health-digest.middleware_groups'), $availableGroups) as $group) {
             $kernel->prependMiddlewareToGroup($group, LogSlowRequests::class);
+        }
+    }
+
+    private function registerDashboard(): void
+    {
+        $this->loadViewsFrom(__DIR__.'/../resources/views', 'health-digest');
+
+        if (! Gate::has(HealthDigest::DASHBOARD_GATE)) {
+            Gate::define(HealthDigest::DASHBOARD_GATE, fn ($user = null): bool => $this->app->environment('local'));
+        }
+
+        if (config('health-digest.dashboard.enabled')) {
+            $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
         }
     }
 
