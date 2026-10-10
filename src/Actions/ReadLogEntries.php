@@ -29,6 +29,22 @@ class ReadLogEntries
 
     private const string VENDOR_DIRECTORY = 'vendor/';
 
+    private const string RELEASES_DIRECTORY = 'releases';
+
+    private const string SINGLE_QUOTED_PATTERN = "/'(?:[^'\\\\]|\\\\.)*'/";
+
+    private const string DOUBLE_QUOTED_PATTERN = '/"(?:[^"\\\\]|\\\\.)*"/';
+
+    private const string DOUBLE_QUOTED_TEXT_PATTERN = '/"[A-Za-z_][\w$]*"(*SKIP)(*FAIL)|"(?:[^"\\\\]|\\\\.)*"/';
+
+    private const array NUMBER_AND_SPACE_PATTERNS = [
+        '/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/' => '?',
+        '/(?<!\w)\d+(?:[.,\/-]\d+)+(?!\w)/' => '?',
+        '/(?<![\w.])(?<!SQLSTATE\[)-?\d+(?:\.\d+)?(?![\w.])/' => '?',
+        '/\(\s*\?(?:\s*,\s*\?)*\s*\)/' => '(?)',
+        '/\s+/' => ' ',
+    ];
+
     private const int SAMPLE_MAX_LENGTH = 300;
 
     /** @return Collection<int, array<string, mixed>> */
@@ -115,7 +131,7 @@ class ReadLogEntries
     private function slowGroupKey(DigestSection $section, array $record): string
     {
         return $section === DigestSection::SlowQueries
-            ? $this->normalize((string) data_get($record, 'context.sql'))
+            ? $this->normalize((string) data_get($record, 'context.sql'), keepQuotedIdentifiers: true)
             : (string) data_get($record, 'context.origin');
     }
 
@@ -129,7 +145,7 @@ class ReadLogEntries
             return [null, null];
         }
 
-        return [stripslashes($exception['class']), Str::after($exception['file'], base_path().'/').':'.$exception['line']];
+        return [stripslashes($exception['class']), $this->stripApplicationPath($exception['file']).':'.$exception['line']];
     }
 
     private function errorGroupKey(string $level, string $message, ?string $exceptionClass, ?string $location): string
@@ -145,22 +161,27 @@ class ReadLogEntries
         return "{$exceptionClass}|{$location}";
     }
 
-    private function normalize(string $text): string
+    private function normalize(string $text, bool $keepQuotedIdentifiers = false): string
     {
-        $normalized = preg_replace(
-            [
-                "/'(?:[^'\\\\]|\\\\.)*'/",
-                '/"(?:[^"\\\\]|\\\\.)*"/',
-                '/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/',
-                '/(?<!\w)\d+(?:[.,\/-]\d+)+(?!\w)/',
-                '/(?<![\w.])(?<!SQLSTATE\[)-?\d+(?:\.\d+)?(?![\w.])/',
-                '/\(\s*\?(?:\s*,\s*\?)*\s*\)/',
-                '/\s+/',
-            ],
-            ['?', '?', '?', '?', '?', '(?)', ' '],
-            str_replace(base_path().'/', '', $text),
-        );
+        $patterns = [
+            self::SINGLE_QUOTED_PATTERN => '?',
+            ($keepQuotedIdentifiers ? self::DOUBLE_QUOTED_TEXT_PATTERN : self::DOUBLE_QUOTED_PATTERN) => '?',
+            ...self::NUMBER_AND_SPACE_PATTERNS,
+        ];
 
-        return trim((string) $normalized);
+        return trim((string) preg_replace(array_keys($patterns), array_values($patterns), $this->stripApplicationPath($text)));
+    }
+
+    /**
+     * Zero-downtime deploys run each release from its own directory, so files
+     * logged by an earlier release live in a sibling of the current base path.
+     */
+    private function stripApplicationPath(string $text): string
+    {
+        $applicationPaths = basename(dirname(base_path())) === self::RELEASES_DIRECTORY
+            ? preg_quote(dirname(base_path()), '#').'/[^/\s]+/'
+            : preg_quote(base_path(), '#').'/';
+
+        return (string) preg_replace('#'.$applicationPaths.'#', '', $text);
     }
 }
