@@ -1,0 +1,8 @@
+providers:
+  - Laravel\Mcp\Server\McpServiceProvider
+  - Laravel\Boost\BoostServiceProvider
+  - FelipeArnold\HealthDigest\HealthDigestServiceProvider
+
+env:
+  - APP_ENV=local
+  - APP_DEBUG=true
