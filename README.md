@@ -23,6 +23,7 @@ turn into tickets, and a dashboard to browse it.
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Usage](#usage)
+- [MCP server](#mcp-server)
 - [Configuration](#configuration)
 - [Digest format](#digest-format)
 - [How grouping works](#how-grouping-works)
@@ -44,6 +45,8 @@ turn into tickets, and a dashboard to browse it.
   `count × p95`, with a stable fingerprint per item.
 - **Dashboard.** A self-contained page that lists slow queries with filters for
   period, tenant and SQL text. No Livewire, no asset build.
+- **MCP server.** Ask Claude (or any MCP client) for the problems reported by
+  the server, from your own machine.
 - **Multi-tenant aware.** Tag every entry with the current tenant and see which
   tenants each problem affects.
 - **Safe by default.** Bindings are never written, literals are masked in the
@@ -155,6 +158,61 @@ $panel->middleware([
 ]);
 ```
 
+## MCP server
+
+The package ships an [MCP](https://modelcontextprotocol.io) server built on
+[`laravel/mcp`](https://github.com/laravel/mcp), so an AI agent can read the
+problems reported by the server without anyone copying logs around. It exposes
+one read-only tool, `list-problems`, that returns the same grouped and ranked
+items as the digest.
+
+Install `laravel/mcp` on the server (`composer require laravel/mcp`), then
+connect from your machine in one of two ways.
+
+### Over SSH
+
+Nothing is exposed over HTTP. The agent starts the server on the host and talks
+to it through stdio:
+
+```bash
+claude mcp add health-digest-prod -- \
+  ssh forge@your-server "cd /home/forge/your-site && php artisan mcp:start health-digest"
+```
+
+### Over HTTP
+
+Set a token in the server's `.env`. Without it the endpoint does not exist.
+
+```dotenv
+HEALTH_DIGEST_MCP_TOKEN=a-long-random-string
+```
+
+Then register the endpoint, sending the token as a Bearer header:
+
+```bash
+claude mcp add --transport http health-digest-prod https://your-app.com/mcp/health-digest \
+  --header "Authorization: Bearer a-long-random-string"
+```
+
+The endpoint answers `404` when no token is configured and `401` when the token
+is missing or wrong. Use a long random value, serve it over HTTPS only, and
+keep it out of version control.
+
+### The `list-problems` tool
+
+| Argument | Description |
+|---|---|
+| `section` | `all` (default), `errors`, `slow_queries` or `slow_requests` |
+| `hours` | Time window, 1 to 720. Default `24` |
+| `limit` | Maximum items per section, 1 to 100. Default `20` |
+| `search` | Keeps items whose SQL, message or origin contains the text |
+| `tenant` | Keeps slow queries and slow requests of one tenant. Errors carry no tenant and are not filtered |
+| `fingerprint` | Returns only the item with that fingerprint |
+
+Ask for example: *"list the errors from production in the last 6 hours and open
+the code at each location."* Items hold normalized text and a `file:line`
+location, never raw values.
+
 ## Configuration
 
 | Key | Environment variable | Default |
@@ -171,6 +229,8 @@ $panel->middleware([
 | `dashboard.enabled` | `HEALTH_DIGEST_DASHBOARD_ENABLED` | `true` |
 | `dashboard.path` | `HEALTH_DIGEST_DASHBOARD_PATH` | `health-digest` |
 | `dashboard.middleware` | — | `['web']` |
+| `mcp.token` | `HEALTH_DIGEST_MCP_TOKEN` | none (HTTP endpoint off) |
+| `mcp.path` | `HEALTH_DIGEST_MCP_PATH` | `mcp/health-digest` |
 
 ## Digest format
 
@@ -234,6 +294,8 @@ ranks above a single very slow one.
 
 ## Limitations
 
+- The MCP server reads the logs of the server it runs on. On a multi-server
+  setup, register one connection per server.
 - Logs are local files. On a multi-server setup each server keeps its own log,
   and the digest only covers the server it runs on.
 - Platforms without a persistent disk, or a log channel that writes to

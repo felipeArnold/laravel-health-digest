@@ -18,10 +18,14 @@
     },
     "require-dev": {
         "laravel/boost": "^2.10",
+        "laravel/mcp": "^1.0",
         "laravel/pint": "^1.18",
         "orchestra/testbench": "^10.0|^11.0",
         "pestphp/pest": "^3.0|^4.0",
         "pestphp/pest-plugin-laravel": "^3.0|^4.0"
+    },
+    "suggest": {
+        "laravel/mcp": "Required to let an AI agent query the digest through the MCP server (^1.0)."
     },
     "autoload": {
         "psr-4": {

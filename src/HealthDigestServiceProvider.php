@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace FelipeArnold\HealthDigest;
 
 use FelipeArnold\HealthDigest\Console\HealthDigestCommand;
+use FelipeArnold\HealthDigest\Http\Middleware\AuthenticateMcpToken;
 use FelipeArnold\HealthDigest\Http\Middleware\LogSlowRequests;
 use FelipeArnold\HealthDigest\Listeners\LogSlowQuery;
+use FelipeArnold\HealthDigest\Mcp\HealthDigestServer;
 use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Database\Events\QueryExecuted;
@@ -15,6 +17,7 @@ use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Mcp\Facades\Mcp;
 use Monolog\Formatter\JsonFormatter;
 
 class HealthDigestServiceProvider extends ServiceProvider
@@ -32,6 +35,7 @@ class HealthDigestServiceProvider extends ServiceProvider
 
         $this->registerLogChannel();
         $this->registerDashboard();
+        $this->registerMcpServer();
 
         Event::listen(QueryExecuted::class, [LogSlowQuery::class, 'handle']);
         Event::listen(JobProcessing::class, [LogSlowQuery::class, 'attributeToJob']);
@@ -67,6 +71,20 @@ class HealthDigestServiceProvider extends ServiceProvider
 
         if (config('health-digest.dashboard.enabled')) {
             $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
+        }
+    }
+
+    private function registerMcpServer(): void
+    {
+        if (! class_exists(Mcp::class)) {
+            return;
+        }
+
+        Mcp::local(HealthDigest::MCP_HANDLE, HealthDigestServer::class);
+
+        if ((string) config('health-digest.mcp.token') !== '') {
+            Mcp::web(trim((string) config('health-digest.mcp.path'), '/'), HealthDigestServer::class)
+                ->middleware(AuthenticateMcpToken::class);
         }
     }
 

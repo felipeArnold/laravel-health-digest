@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-10-11
+
+### Added
+
+- MCP server with a read-only `list-problems` tool, built on `laravel/mcp`.
+  Available over stdio with `php artisan mcp:start health-digest`, and over
+  HTTP at `/mcp/health-digest` once `HEALTH_DIGEST_MCP_TOKEN` is set.
+- `mcp.token` and `mcp.path` options.
+
 ## [0.2.1] - 2026-10-10
 
 ### Fixed
@@ -46,6 +55,7 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `health:digest` command that groups slow queries, slow requests and errors
   into a ranked JSON digest.
 
+[0.3.0]: https://github.com/felipeArnold/laravel-health-digest/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/felipeArnold/laravel-health-digest/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/felipeArnold/laravel-health-digest/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/felipeArnold/laravel-health-digest/compare/v0.1.0...v0.1.1

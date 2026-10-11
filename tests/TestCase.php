@@ -6,6 +6,7 @@ namespace FelipeArnold\HealthDigest\Tests;
 
 use FelipeArnold\HealthDigest\HealthDigest;
 use FelipeArnold\HealthDigest\HealthDigestServiceProvider;
+use Laravel\Mcp\Server\McpServiceProvider;
 use Orchestra\Testbench\TestCase as Orchestra;
 
 abstract class TestCase extends Orchestra
@@ -21,11 +22,12 @@ abstract class TestCase extends Orchestra
     {
         $app['config']->set('app.key', 'base64:'.base64_encode(str_repeat('a', 32)));
         $app['config']->set('app.timezone', 'America/Sao_Paulo');
+        $app['config']->set('health-digest.mcp.token', 'secret-token');
         date_default_timezone_set('America/Sao_Paulo');
     }
 
     protected function getPackageProviders($app): array
     {
-        return [HealthDigestServiceProvider::class];
+        return [McpServiceProvider::class, HealthDigestServiceProvider::class];
     }
 }

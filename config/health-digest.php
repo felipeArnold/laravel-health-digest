@@ -57,4 +57,15 @@ return [
         'middleware' => ['web'],
     ],
 
+    /*
+    | MCP server that lets an AI agent query the digest. The "health-digest"
+    | handle is always available through "php artisan mcp:start health-digest".
+    | The HTTP endpoint is served only when a token is set, and every request
+    | must send it as a Bearer token.
+    */
+    'mcp' => [
+        'token' => env('HEALTH_DIGEST_MCP_TOKEN'),
+        'path' => env('HEALTH_DIGEST_MCP_PATH', 'mcp/health-digest'),
+    ],
+
 ];

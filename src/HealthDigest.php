@@ -13,6 +13,8 @@ class HealthDigest
 
     public const string DASHBOARD_GATE = 'viewHealthDigest';
 
+    public const string MCP_HANDLE = 'health-digest';
+
     private static ?Closure $tenantResolver = null;
 
     /** @param  Closure(): (string|int|null)  $resolver */
